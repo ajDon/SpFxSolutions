@@ -1,0 +1,18 @@
+{
+  "$schema": "https://dev.office.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "my-test-webpart-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/myTestWebpart/MyTestWebpartWebPart.js",
+          "manifest": "./src/webparts/myTestWebpart/MyTestWebpartWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "MyTestWebpartWebPartStrings": "lib/webparts/myTestWebpart/loc/{locale}.js"
+  }
+}
