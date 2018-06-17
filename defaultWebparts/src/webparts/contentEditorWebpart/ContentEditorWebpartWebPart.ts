@@ -1,31 +1,16 @@
-import { Version, DisplayMode } from '@microsoft/sp-core-library';
-import {
-  BaseClientSideWebPart,
-  IPropertyPaneConfiguration,
-  PropertyPaneTextField,
-  PropertyPaneToggle,
-  PropertyPaneLink
-} from '@microsoft/sp-webpart-base';
-import { escape } from '@microsoft/sp-lodash-subset';
+import { Version } from '@microsoft/sp-core-library';
+import { DigestCache, IDigestCache, SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import { SPComponentLoader } from '@microsoft/sp-loader';
-import {
-  SPHttpClient,
-  SPHttpClientResponse,
-  IDigestCache,
-  DigestCache
-} from '@microsoft/sp-http';
-
-import styles from './ContentEditorWebpartWebPart.module.scss';
+import { BaseClientSideWebPart, IPropertyPaneConfiguration, PropertyPaneLink, PropertyPaneTextField, PropertyPaneToggle } from '@microsoft/sp-webpart-base';
 import * as strings from 'ContentEditorWebpartWebPartStrings';
-import { SPHttpClientConfiguration } from '@microsoft/sp-http';
+import styles from './ContentEditorWebpartWebPart.module.scss';
+
 
 export interface IContentEditorWebpartWebPartProps {
-  // description: string;
   spPageContextInfo: boolean;
   htmlUrl: URL;
   addHtmlDirectly: boolean;
   addHtmlScript: string;
-  enableSODFunctions: boolean;
   enableRequestDigest: boolean;
 }
 
@@ -33,7 +18,6 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
 
   public render(): void {
     this.addSpContextInfo();
-    this.addSODFunctions();
     this.addRequestDigest();
     if (this.properties.addHtmlDirectly) {
       if (this.properties.addHtmlScript.trim() != '') {
@@ -45,19 +29,19 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
       else
         this.defaultHTML();
     }
-    else if (this.properties.htmlUrl != undefined) {
+    else if (this.properties.htmlUrl != undefined || this.properties.htmlUrl != null) {
       let htmlLink: string = this.properties.htmlUrl.toString();
       if (htmlLink != "") {
         this.loadHTML(htmlLink).then((response) => {
           if (response.trim() != '') {
             let responseHTML = this.convertStringToHTML(response);
-            this.addAllScripts(responseHTML).then((response) => {
+            this.addAllScripts(responseHTML).then(() => {
               this.domElement.innerHTML = responseHTML.outerHTML;
             });
 
           }
           else
-            this.defaultHTML();
+            this.noHTMLFound();
         })
           .catch((error) => {
             this.domElement.innerHTML = `
@@ -74,15 +58,27 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
           `;
           });
       }
+      else
+        this.defaultHTML();
     }
     else {
       this.defaultHTML();
     }
   }
-  private nodeName(elem, name) {
+
+  /**
+   * Determine Type of the code
+   * @param elem HTMLElement
+   * @param name Nodename
+   */
+  private nodeName(elem: HTMLElement, name: string) {
     return elem.nodeName && elem.nodeName.toUpperCase() === name.toUpperCase();
   }
 
+  /**
+   * Add Script from HTML Element
+   * @param element HTMLElemt
+   */
   protected async addAllScripts(element: HTMLElement) {
     (<any>window).ScriptGlobal = {};
     const scripts = [];
@@ -132,6 +128,10 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
     }
   }
 
+  /**
+   * Evaluate Scripts
+   * @param elem Script without Source
+   */
   private evalScript(elem) {
     const data = (elem.text || elem.textContent || elem.innerHTML || "");
     const headTag = document.getElementsByTagName("head")[0] || document.documentElement;
@@ -158,12 +158,20 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
     }, 1000);
   }
 
+  /**
+   * Convert HTML from String
+   * @param htmlString HTML string
+   * @returns Div Element
+   */
   protected convertStringToHTML(htmlString: string): HTMLDivElement {
     const div = document.createElement('div');
     div.innerHTML = htmlString;
     return div;
   }
-
+  
+  /**
+   * Default HTML to the Page
+   */
   protected defaultHTML(): void {
     this.domElement.innerHTML = `
       <div class="${ styles.contentEditorWebpart}">
@@ -178,167 +186,74 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
       </div>
       `;
   }
+
+  /**
+   * No HTML Found
+   */
+  protected noHTMLFound(): void {
+    this.domElement.innerHTML = `
+      <div class="${ styles.contentEditorWebpart}">
+        <div class="${ styles.container}">
+          <div class="${ styles.row}">
+            <div class="${ styles.column}">
+              <span class="${ styles.title}">Content and Script Editor</span>
+              <p class="${ styles.subTitle}">No HTML found!!!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      `;
+  }
+
+  /**
+   * Load HTML from Link
+   * @param htmlLink Link
+   * @returns Response based on HTML Link
+   */
   protected loadHTML(htmlLink: string): Promise<string> {
     return this.context.spHttpClient.get(htmlLink, SPHttpClient.configurations.v1).then((response: SPHttpClientResponse) => {
       return response.text();
     });
   }
+
+  /**
+   * Add _spPageContextInfo to the Page
+   */
   protected async addSpContextInfo() {
     if (this.properties.spPageContextInfo && !window["_spPageContextInfo"]) {
       window["_spPageContextInfo"] = this.context.pageContext.legacyPageContext;
     }
   }
 
-  protected async addSODFunctions() {
-    if (this.properties.enableSODFunctions && !window["SP"]) {
-      const head = document.getElementsByTagName("head")[0];
-      const allScriptReferences: string[] = [
-        this.context.pageContext.web.absoluteUrl + "/ScriptResource.axd?d=DAcecIMKyRVIe2katSv_eSqkfzwWu66cDhiDAZgTIPkwiDG0s7JyEY89zijyQrsgxv2WAm7hCRFej7EoXjMgpZY0NNc4kkPd4rfYU7kyBoGmBwrLZ3NUz4ig94J6fTJBOcv6Tarf8boKZ3nF8-wibRqESkQkuCs3N7yh2UuqR3aMu0hj55t48S0XnLXPTzFq0&t=72fc8ae3",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/1033/initstrings.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/init.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/1033/strings.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/clienttemplates.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/theming.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/ie55up.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206//online/scripts/sposuitenav.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/blank.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/1033/sp.res.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.runtime.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.init.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.ui.dialog.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/core.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.core.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/ms.rte.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.ui.rte.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/1033/sp.jsgrid.res.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.taxonomy.js",
-        // this.context.pageContext.web.absoluteUrl + "/_layouts/15/ScriptResx.ashx?culture=en%2Dus&amp;name=ScriptResources&amp;rev=pMUQ%2Fe2tBQON96NLsfaMtA%3D%3D",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/scriptforwebtaggingui.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.ui.taxonomy.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.ui.reputation.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/sp.ui.listsearchboxbootstrap.js",
-        "https://static.sharepointonline.com/bld/_layouts/15/16.0.7618.1206/calloutusagecontrolscript.js"
-      ];
-      for (let index = 0; index < allScriptReferences.length; index++) {
-        const scriptSrc = allScriptReferences[index];
-        setTimeout(() => {
-          const scriptElement = document.createElement("script");
-          scriptElement.type = "text/javascript";
-          scriptElement.src = scriptSrc;
-          head.insertBefore(scriptElement, head.lastChild);
-        }, 50);
-      }
-      console.info("Display mode:" + this.displayMode);
-      if (this.displayMode !== DisplayMode.Edit) {
-        const addCoreV4CSS = document.createElement("link");
-        addCoreV4CSS.href = this.context.pageContext.web.absoluteUrl + "/_layouts/15/1033/styles/Themable/corev15.css?rev=mX2UOCi99%2FD8gyljp67ezg%3D%3DTAG120";
-        addCoreV4CSS.rel = "stylesheet";
-        head.insertBefore(addCoreV4CSS, head.lastChild);
-      }
-      setTimeout(() => {
-        let SP = <any>window["SP"];
-        const addSODScripts = document.createElement("script");
-        addSODScripts.type = "text/javascript";
-        addSODScripts.innerText = `
-        SP.SOD.registerSod("require.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002frequire.js");
-        SP.SOD.registerSod("menu.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fmenu.js");
-        SP.SOD.registerSod("mQuery.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fmquery.js");
-        SP.SOD.registerSod("callout.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fcallout.js");
-        SP.SOD.registerSodDep("callout.js", "mQuery.js");
-        SP.SOD.registerSod("sharedhovercard.strings.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002f1033\u002fsharedhovercard.strings.js");
-        SP.SOD.registerSod("sharedhovercard.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsharedhovercard.js");
-        SP.SOD.registerSodDep("sharedhovercard.js", "sharedhovercard.strings.js");
-        SP.SOD.registerSod("sharing.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsharing.js");
-        SP.SOD.registerSodDep("sharing.js", "mQuery.js");
-        SP.SOD.registerSod("suitelinks.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsuitelinks.js");
-        SP.SOD.registerSod("clientrenderer.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fclientrenderer.js");
-        SP.SOD.registerSod("srch.resources.resx", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002f1033\u002fsrch.resources.js");
-        SP.SOD.registerSod("search.clientcontrols.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsearch.clientcontrols.js");
-        SP.SOD.registerSodDep("search.clientcontrols.js", "clientrenderer.js");
-        SP.SOD.registerSodDep("search.clientcontrols.js", "srch.resources.resx");
-        SP.SOD.registerSod("sp.search.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.search.js");
-        SP.SOD.registerSod("ajaxtoolkit.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fajaxtoolkit.js");
-        SP.SOD.registerSodDep("ajaxtoolkit.js", "search.clientcontrols.js");
-        SP.SOD.registerSod("userprofile", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.userprofiles.js");
-        SP.SOD.registerSod("followingcommon.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002ffollowingcommon.js");
-        SP.SOD.registerSodDep("followingcommon.js", "userprofile");
-        SP.SOD.registerSodDep("followingcommon.js", "mQuery.js");
-        SP.SOD.registerSod("profilebrowserscriptres.resx", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002f1033\u002fprofilebrowserscriptres.js");
-        SP.SOD.registerSod("sp.ui.mysitecommon.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.mysitecommon.js");
-        SP.SOD.registerSodDep("sp.ui.mysitecommon.js", "userprofile");
-        SP.SOD.registerSodDep("sp.ui.mysitecommon.js", "profilebrowserscriptres.resx");
-        SP.SOD.registerSod("inplview", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002finplview.js");
-        SP.SOD.registerSod("datepicker.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fdatepicker.js");
-        SP.SOD.registerSod("jsgrid.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fjsgrid.js");
-        SP.SOD.registerSod("sp.datetimeutil.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.datetimeutil.js");
-        SP.SOD.registerSod("jsgrid.gantt.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fjsgrid.gantt.js");
-        SP.SOD.registerSodDep("jsgrid.gantt.js", "jsgrid.js");
-        SP.SOD.registerSodDep("jsgrid.gantt.js", "sp.datetimeutil.js");
-        SP.SOD.registerSod("spgantt.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fspgantt.js");
-        SP.SOD.registerSodDep("spgantt.js", "jsgrid.js");
-        SP.SOD.registerSodDep("spgantt.js", "jsgrid.gantt.js");
-        SP.SOD.registerSod("clientforms.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fclientforms.js");
-        SP.SOD.registerSod("autofill.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fautofill.js");
-        SP.SOD.registerSod("clientpeoplepicker.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fclientpeoplepicker.js");
-        SP.SOD.registerSodDep("clientpeoplepicker.js", "autofill.js");
-        SP.SOD.registerSod("sp.ui.combobox.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.combobox.js");
-        SP.SOD.registerSod("jsapiextensibilitymanager.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fjsapiextensibilitymanager.js");
-        SP.SOD.registerSod("ganttsharedapi.generated.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fganttsharedapi.generated.js");
-        SP.SOD.registerSod("ganttapishim.generated.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fganttapishim.generated.js");
-        SP.SOD.registerSod("createsharedfolderdialog.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fcreatesharedfolderdialog.js");
-        SP.SOD.registerSodDep("createsharedfolderdialog.js", "clientpeoplepicker.js");
-        SP.SOD.registerSodDep("createsharedfolderdialog.js", "clientforms.js");
-        SP.SOD.registerSod("reputation.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002freputation.js");
-        SP.SOD.registerSod("sp.ui.listsearchbox.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.listsearchbox.js");
-        SP.SOD.registerSodDep("sp.ui.listsearchbox.js", "search.clientcontrols.js");
-        SP.SOD.registerSodDep("sp.ui.listsearchbox.js", "profilebrowserscriptres.resx");
-        SP.SOD.registerSod("sp.search.apps.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.search.apps.js");
-        SP.SOD.registerSod("offline.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002foffline.js");
-        SP.SOD.registerSod("dragdrop.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fdragdrop.js");
-        SP.SOD.registerSod("online/scripts/suiteextensions.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fonline\u002fscripts\u002fsuiteextensions.js");
-        SP.SOD.registerSod("filePreview.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002ffilepreview.js");
-        SP.SOD.registerSod("movecopy.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fmovecopy.js");
-        SP.SOD.registerSod("dlp.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fdlp.js");
-        SP.SOD.registerSod("shell/shell15.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002f1033\u002fshell\u002fshell15.js");
-        SP.SOD.registerSod("cui.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fcui.js");
-        SP.SOD.registerSod("ribbon", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ribbon.js");
-        SP.SOD.registerSodDep("ribbon", "cui.js");
-        SP.SOD.registerSodDep("ribbon", "inplview");
-        SP.SOD.registerSod("WPAdderClass", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fwpadder.js");
-        SP.SOD.registerSod("quicklaunch.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fquicklaunch.js");
-        SP.SOD.registerSodDep("quicklaunch.js", "dragdrop.js");
-        SP.SOD.registerSod("sp.ui.pub.ribbon.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.pub.ribbon.js");
-        SP.SOD.registerSod("sp.publishing.resources.resx", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002f1033\u002fsp.publishing.resources.js");
-        SP.SOD.registerSod("sp.documentmanagement.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.documentmanagement.js");
-        SP.SOD.registerSod("assetpickers.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fassetpickers.js");
-        SP.SOD.registerSod("sp.ui.rte.publishing.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.rte.publishing.js");
-        SP.SOD.registerSod("spellcheckentirepage.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fspellcheckentirepage.js");
-        SP.SOD.registerSod("sp.ui.spellcheck.js", "https:\u002f\u002fstatic.sharepointonline.com\u002fbld\u002f_layouts\u002f15\u002f16.0.7618.1206\u002fsp.ui.spellcheck.js");
-        SP.SOD.registerSodDep("spgantt.js", "SP.UI.Rte.js");
-        `;
-        head.insertBefore(addSODScripts, head.lastChild);
-      }, 2000);
-    }
-  }
-
+  /**
+   * Add Request Digest
+   */
   protected async addRequestDigest() {
     if (this.properties.enableRequestDigest) {
       this.getDigest();
     }
   }
 
+  /**
+   * Get Request Digest to the page
+   * @returns Loads Digest and adds it to Hidden Field
+   */
   protected getDigest(): Promise<void> {
     return new Promise<void>((resolve: () => void, reject: (error: any) => void): void => {
       const digestCache: IDigestCache = this.context.serviceScope.consume(DigestCache.serviceKey);
       digestCache.fetchDigest(this.context.pageContext.web.serverRelativeUrl).then((digest: string): void => {
-        // use the digest here
-        const requestDigestElement = document.createElement("input");
-        const head = document.getElementsByTagName("head")[0];
-        requestDigestElement.type = "hidden";
-        requestDigestElement.value = digest;
-        requestDigestElement.id = "__REQUESTDIGEST";
-        head.insertBefore(requestDigestElement, head.lastChild);
+        if (document.getElementById("__REQUESTDIGEST") === null) {
+          const requestDigestElement = document.createElement("input");
+          const head = document.getElementsByTagName("head")[0];
+          requestDigestElement.type = "hidden";
+          requestDigestElement.value = digest;
+          requestDigestElement.id = "__REQUESTDIGEST";
+          head.insertBefore(requestDigestElement, head.lastChild);
+        }
+        else {
+          const requestDigestElement = document.getElementById("__REQUESTDIGEST");
+          requestDigestElement.nodeValue = digest;
+        }
         resolve();
       });
     });
@@ -400,12 +315,6 @@ export default class ContentEditorWebpartWebPart extends BaseClientSideWebPart<I
                 PropertyPaneToggle('spPageContextInfo', {
                   label: strings.SpPageContextInfoFieldLabel,
                   checked: this.properties.spPageContextInfo,
-                  onText: strings.EnabledText,
-                  offText: strings.DisabledText
-                }),
-                PropertyPaneToggle("enableSODFunctions", {
-                  label: strings.EnableSODFunctionsFieldLabel,
-                  checked: this.properties.enableSODFunctions,
                   onText: strings.EnabledText,
                   offText: strings.DisabledText
                 }),
