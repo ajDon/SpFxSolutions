@@ -1,0 +1,12 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "isCreatingSolution": false,
+    "environment": "spo",
+    "version": "1.5.1",
+    "libraryName": "spfx-with-react-strap",
+    "libraryId": "f0acd128-03e4-4441-971c-f715b9bc8bd8",
+    "packageManager": "npm",
+    "plusBeta": true,
+    "componentType": "webpart"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "reactstrap-in-spfx-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/reactstrapInSpfx/ReactstrapInSpfxWebPart.js",
+          "manifest": "./src/webparts/reactstrapInSpfx/ReactstrapInSpfxWebPart.manifest.json"
+        }
+      ]
+    },
+    "hello-world-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/helloWorld/HelloWorldWebPart.js",
+          "manifest": "./src/webparts/helloWorld/HelloWorldWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "ReactstrapInSpfxWebPartStrings": "lib/webparts/reactstrapInSpfx/loc/{locale}.js",
+    "HelloWorldWebPartStrings": "lib/webparts/helloWorld/loc/{locale}.js"
+  }
+}
