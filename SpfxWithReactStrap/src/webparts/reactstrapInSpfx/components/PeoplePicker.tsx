@@ -43,6 +43,7 @@ export interface IPeoplePicker {
     principalTypeDistributionList: boolean;
     numberOfItems: number;
     onChange?: (items: SharePointUserPersona[]) => void;
+    defaultSelectedItems?: IPersonaProps[];
 }
 
 export default class PeoplePicker extends React.Component<IPeoplePicker, PeoplePickerState>{
@@ -84,6 +85,16 @@ export default class PeoplePicker extends React.Component<IPeoplePicker, PeopleP
             delayResults: false,
             selectedItems: []
         };
+
+        this._defaultUsers = this._defaultUsers.bind(this);
+    }
+
+    private _defaultUsers() {
+        let defaultUsers: IPersonaProps[] = [];
+        if (this.props.defaultSelectedItems) {
+            defaultUsers = this.props.defaultSelectedItems;
+        }
+        return defaultUsers;
     }
 
     public render(): React.ReactElement<IPeoplePicker> {
@@ -95,6 +106,7 @@ export default class PeoplePicker extends React.Component<IPeoplePicker, PeopleP
                 pickerSuggestionsProps={suggestionProps}
                 className={'ms-PeoplePicker'}
                 key={'normal'}
+                defaultSelectedItems={this._defaultUsers()}
             />
         );
     }

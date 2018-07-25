@@ -26,7 +26,8 @@
     "jquery": "^3.3.1",
     "react": "15.6.2",
     "react-dom": "15.6.2",
-    "reactstrap": "^6.3.0"
+    "reactstrap": "^6.3.0",
+    "sp-pnp-js": "^3.0.10"
   },
   "devDependencies": {
     "@microsoft/sp-build-web": "1.5.1-plusbeta",
